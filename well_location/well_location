@@ -1,0 +1,1258 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Описание проекта"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Допустим, вы работаете в добывающей компании «ГлавРосГосНефть». Нужно решить, где бурить новую скважину.\n",
+    "\n",
+    "Вам предоставлены пробы нефти в трёх регионах: в каждом 10 000 месторождений, где измерили качество нефти и объём её запасов. Постройте модель машинного обучения, которая поможет определить регион, где добыча принесёт наибольшую прибыль. Проанализируйте возможную прибыль и риски техникой *Bootstrap.*\n",
+    "\n",
+    "Шаги для выбора локации:\n",
+    "\n",
+    "- В избранном регионе ищут месторождения, для каждого определяют значения признаков;\n",
+    "- Строят модель и оценивают объём запасов;\n",
+    "- Выбирают месторождения с самым высокими оценками значений. Количество месторождений зависит от бюджета компании и стоимости разработки одной скважины;\n",
+    "- Прибыль равна суммарной прибыли отобранных месторождений."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 1. Загрузка и подготовка данных"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#импорт необходимых библиотек\n",
+    "import pandas as pd \n",
+    "import numpy as np\n",
+    "from sklearn.linear_model import LinearRegression\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.metrics import mean_squared_error\n",
+    "from numpy.random import RandomState\n",
+    "import matplotlib.pyplot as plt\n",
+    "from scipy.stats import skewnorm"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#загрузка базы\n",
+    "data_0 = pd.read_csv('/datasets/geo_data_0.csv')\n",
+    "data_1 = pd.read_csv('/datasets/geo_data_1.csv')\n",
+    "data_2 = pd.read_csv('/datasets/geo_data_2.csv')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>id</th>\n",
+       "      <th>f0</th>\n",
+       "      <th>f1</th>\n",
+       "      <th>f2</th>\n",
+       "      <th>product</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>txEyH</td>\n",
+       "      <td>0.705745</td>\n",
+       "      <td>-0.497823</td>\n",
+       "      <td>1.221170</td>\n",
+       "      <td>105.280062</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>2acmU</td>\n",
+       "      <td>1.334711</td>\n",
+       "      <td>-0.340164</td>\n",
+       "      <td>4.365080</td>\n",
+       "      <td>73.037750</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>409Wp</td>\n",
+       "      <td>1.022732</td>\n",
+       "      <td>0.151990</td>\n",
+       "      <td>1.419926</td>\n",
+       "      <td>85.265647</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>iJLyR</td>\n",
+       "      <td>-0.032172</td>\n",
+       "      <td>0.139033</td>\n",
+       "      <td>2.978566</td>\n",
+       "      <td>168.620776</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>Xdl7t</td>\n",
+       "      <td>1.988431</td>\n",
+       "      <td>0.155413</td>\n",
+       "      <td>4.751769</td>\n",
+       "      <td>154.036647</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>5</td>\n",
+       "      <td>wX4Hy</td>\n",
+       "      <td>0.969570</td>\n",
+       "      <td>0.489775</td>\n",
+       "      <td>-0.735383</td>\n",
+       "      <td>64.741541</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>6</td>\n",
+       "      <td>tL6pL</td>\n",
+       "      <td>0.645075</td>\n",
+       "      <td>0.530656</td>\n",
+       "      <td>1.780266</td>\n",
+       "      <td>49.055285</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>7</td>\n",
+       "      <td>BYPU6</td>\n",
+       "      <td>-0.400648</td>\n",
+       "      <td>0.808337</td>\n",
+       "      <td>-5.624670</td>\n",
+       "      <td>72.943292</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>8</td>\n",
+       "      <td>j9Oui</td>\n",
+       "      <td>0.643105</td>\n",
+       "      <td>-0.551583</td>\n",
+       "      <td>2.372141</td>\n",
+       "      <td>113.356160</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>9</td>\n",
+       "      <td>OLuZU</td>\n",
+       "      <td>2.173381</td>\n",
+       "      <td>0.563698</td>\n",
+       "      <td>9.441852</td>\n",
+       "      <td>127.910945</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "      id        f0        f1        f2     product\n",
+       "0  txEyH  0.705745 -0.497823  1.221170  105.280062\n",
+       "1  2acmU  1.334711 -0.340164  4.365080   73.037750\n",
+       "2  409Wp  1.022732  0.151990  1.419926   85.265647\n",
+       "3  iJLyR -0.032172  0.139033  2.978566  168.620776\n",
+       "4  Xdl7t  1.988431  0.155413  4.751769  154.036647\n",
+       "5  wX4Hy  0.969570  0.489775 -0.735383   64.741541\n",
+       "6  tL6pL  0.645075  0.530656  1.780266   49.055285\n",
+       "7  BYPU6 -0.400648  0.808337 -5.624670   72.943292\n",
+       "8  j9Oui  0.643105 -0.551583  2.372141  113.356160\n",
+       "9  OLuZU  2.173381  0.563698  9.441852  127.910945"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>id</th>\n",
+       "      <th>f0</th>\n",
+       "      <th>f1</th>\n",
+       "      <th>f2</th>\n",
+       "      <th>product</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>kBEdx</td>\n",
+       "      <td>-15.001348</td>\n",
+       "      <td>-8.276000</td>\n",
+       "      <td>-0.005876</td>\n",
+       "      <td>3.179103</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>62mP7</td>\n",
+       "      <td>14.272088</td>\n",
+       "      <td>-3.475083</td>\n",
+       "      <td>0.999183</td>\n",
+       "      <td>26.953261</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>vyE1P</td>\n",
+       "      <td>6.263187</td>\n",
+       "      <td>-5.948386</td>\n",
+       "      <td>5.001160</td>\n",
+       "      <td>134.766305</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>KcrkZ</td>\n",
+       "      <td>-13.081196</td>\n",
+       "      <td>-11.506057</td>\n",
+       "      <td>4.999415</td>\n",
+       "      <td>137.945408</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>AHL4O</td>\n",
+       "      <td>12.702195</td>\n",
+       "      <td>-8.147433</td>\n",
+       "      <td>5.004363</td>\n",
+       "      <td>134.766305</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>5</td>\n",
+       "      <td>HHckp</td>\n",
+       "      <td>-3.327590</td>\n",
+       "      <td>-2.205276</td>\n",
+       "      <td>3.003647</td>\n",
+       "      <td>84.038886</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>6</td>\n",
+       "      <td>h5Ujo</td>\n",
+       "      <td>-11.142655</td>\n",
+       "      <td>-10.133399</td>\n",
+       "      <td>4.002382</td>\n",
+       "      <td>110.992147</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>7</td>\n",
+       "      <td>muH9x</td>\n",
+       "      <td>4.234715</td>\n",
+       "      <td>-0.001354</td>\n",
+       "      <td>2.004588</td>\n",
+       "      <td>53.906522</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>8</td>\n",
+       "      <td>YiRkx</td>\n",
+       "      <td>13.355129</td>\n",
+       "      <td>-0.332068</td>\n",
+       "      <td>4.998647</td>\n",
+       "      <td>134.766305</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>9</td>\n",
+       "      <td>jG6Gi</td>\n",
+       "      <td>1.069227</td>\n",
+       "      <td>-11.025667</td>\n",
+       "      <td>4.997844</td>\n",
+       "      <td>137.945408</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "      id         f0         f1        f2     product\n",
+       "0  kBEdx -15.001348  -8.276000 -0.005876    3.179103\n",
+       "1  62mP7  14.272088  -3.475083  0.999183   26.953261\n",
+       "2  vyE1P   6.263187  -5.948386  5.001160  134.766305\n",
+       "3  KcrkZ -13.081196 -11.506057  4.999415  137.945408\n",
+       "4  AHL4O  12.702195  -8.147433  5.004363  134.766305\n",
+       "5  HHckp  -3.327590  -2.205276  3.003647   84.038886\n",
+       "6  h5Ujo -11.142655 -10.133399  4.002382  110.992147\n",
+       "7  muH9x   4.234715  -0.001354  2.004588   53.906522\n",
+       "8  YiRkx  13.355129  -0.332068  4.998647  134.766305\n",
+       "9  jG6Gi   1.069227 -11.025667  4.997844  137.945408"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>id</th>\n",
+       "      <th>f0</th>\n",
+       "      <th>f1</th>\n",
+       "      <th>f2</th>\n",
+       "      <th>product</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>fwXo0</td>\n",
+       "      <td>-1.146987</td>\n",
+       "      <td>0.963328</td>\n",
+       "      <td>-0.828965</td>\n",
+       "      <td>27.758673</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>WJtFt</td>\n",
+       "      <td>0.262778</td>\n",
+       "      <td>0.269839</td>\n",
+       "      <td>-2.530187</td>\n",
+       "      <td>56.069697</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>ovLUW</td>\n",
+       "      <td>0.194587</td>\n",
+       "      <td>0.289035</td>\n",
+       "      <td>-5.586433</td>\n",
+       "      <td>62.871910</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>q6cA6</td>\n",
+       "      <td>2.236060</td>\n",
+       "      <td>-0.553760</td>\n",
+       "      <td>0.930038</td>\n",
+       "      <td>114.572842</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>WPMUX</td>\n",
+       "      <td>-0.515993</td>\n",
+       "      <td>1.716266</td>\n",
+       "      <td>5.899011</td>\n",
+       "      <td>149.600746</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>5</td>\n",
+       "      <td>LzZXx</td>\n",
+       "      <td>-0.758092</td>\n",
+       "      <td>0.710691</td>\n",
+       "      <td>2.585887</td>\n",
+       "      <td>90.222465</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>6</td>\n",
+       "      <td>WBHRv</td>\n",
+       "      <td>-0.574891</td>\n",
+       "      <td>0.317727</td>\n",
+       "      <td>1.773745</td>\n",
+       "      <td>45.641478</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>7</td>\n",
+       "      <td>XO8fn</td>\n",
+       "      <td>-1.906649</td>\n",
+       "      <td>-2.458350</td>\n",
+       "      <td>-0.177097</td>\n",
+       "      <td>72.480640</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>8</td>\n",
+       "      <td>ybmQ5</td>\n",
+       "      <td>1.776292</td>\n",
+       "      <td>-0.279356</td>\n",
+       "      <td>3.004156</td>\n",
+       "      <td>106.616832</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>9</td>\n",
+       "      <td>OilcN</td>\n",
+       "      <td>-1.214452</td>\n",
+       "      <td>-0.439314</td>\n",
+       "      <td>5.922514</td>\n",
+       "      <td>52.954532</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "      id        f0        f1        f2     product\n",
+       "0  fwXo0 -1.146987  0.963328 -0.828965   27.758673\n",
+       "1  WJtFt  0.262778  0.269839 -2.530187   56.069697\n",
+       "2  ovLUW  0.194587  0.289035 -5.586433   62.871910\n",
+       "3  q6cA6  2.236060 -0.553760  0.930038  114.572842\n",
+       "4  WPMUX -0.515993  1.716266  5.899011  149.600746\n",
+       "5  LzZXx -0.758092  0.710691  2.585887   90.222465\n",
+       "6  WBHRv -0.574891  0.317727  1.773745   45.641478\n",
+       "7  XO8fn -1.906649 -2.458350 -0.177097   72.480640\n",
+       "8  ybmQ5  1.776292 -0.279356  3.004156  106.616832\n",
+       "9  OilcN -1.214452 -0.439314  5.922514   52.954532"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "#проверка выдачи по базам\n",
+    "display(data_0.head(10))\n",
+    "display(data_1.head(10))\n",
+    "display(data_2.head(10))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#удаляем лишние столбцы из данных\n",
+    "data_0 = data_0.drop('id', axis=1)\n",
+    "data_1 = data_1.drop('id', axis=1)\n",
+    "data_2 = data_2.drop('id', axis=1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "<class 'pandas.core.frame.DataFrame'>\n",
+      "RangeIndex: 100000 entries, 0 to 99999\n",
+      "Data columns (total 4 columns):\n",
+      "f0         100000 non-null float64\n",
+      "f1         100000 non-null float64\n",
+      "f2         100000 non-null float64\n",
+      "product    100000 non-null float64\n",
+      "dtypes: float64(4)\n",
+      "memory usage: 3.1 MB\n",
+      "<class 'pandas.core.frame.DataFrame'>\n",
+      "RangeIndex: 100000 entries, 0 to 99999\n",
+      "Data columns (total 4 columns):\n",
+      "f0         100000 non-null float64\n",
+      "f1         100000 non-null float64\n",
+      "f2         100000 non-null float64\n",
+      "product    100000 non-null float64\n",
+      "dtypes: float64(4)\n",
+      "memory usage: 3.1 MB\n",
+      "<class 'pandas.core.frame.DataFrame'>\n",
+      "RangeIndex: 100000 entries, 0 to 99999\n",
+      "Data columns (total 4 columns):\n",
+      "f0         100000 non-null float64\n",
+      "f1         100000 non-null float64\n",
+      "f2         100000 non-null float64\n",
+      "product    100000 non-null float64\n",
+      "dtypes: float64(4)\n",
+      "memory usage: 3.1 MB\n"
+     ]
+    }
+   ],
+   "source": [
+    "#просмотр информации по базам\n",
+    "data_0.info()\n",
+    "data_1.info()\n",
+    "data_2.info()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Шаг 1. Выводы   \n",
+    "1) Извлекли нужные библиотеки для дальнейшей работы.   \n",
+    "2) Загрузили баззы данных.  \n",
+    "3) Проверили выдачу по базам и посомтрели информацию по базам (наличие пропущенных значений) Базы полностью заполнены, пропущенных значений нет. "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 2. Обучение и проверка модели"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#разделение на обучающую и тестовую выборку (data_0)\n",
+    "data_train_0, data_valid_0 = train_test_split(data_0, test_size=0.25, random_state=12345)\n",
+    "features_train_0 = data_train_0.drop(['product'], axis=1)\n",
+    "target_train_0 = data_train_0['product']\n",
+    "features_valid_0 = data_valid_0.drop(['product'], axis=1)\n",
+    "target_valid_0 = data_valid_0['product']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#разделение на обучающую и тестовую выборку (data_1)\n",
+    "data_train_1, data_valid_1 = train_test_split(data_1, test_size=0.25, random_state=12345)\n",
+    "features_train_1 = data_train_1.drop(['product'], axis=1)\n",
+    "target_train_1 = data_train_1['product']\n",
+    "features_valid_1 = data_valid_1.drop(['product'], axis=1)\n",
+    "target_valid_1 = data_valid_1['product']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#разделение на обучающую и тестовую выборку (data_2)\n",
+    "data_train_2, data_valid_2 = train_test_split(data_2, test_size=0.25, random_state=12345)\n",
+    "features_train_2 = data_train_2.drop(['product'], axis=1)\n",
+    "target_train_2 = data_train_2['product']\n",
+    "features_valid_2 = data_valid_2.drop(['product'], axis=1)\n",
+    "target_valid_2 = data_valid_2['product']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "LinearRegression(copy_X=True, fit_intercept=True, n_jobs=None, normalize=False)"
+      ]
+     },
+     "execution_count": 9,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "#обучение модели\n",
+    "model_0 = LinearRegression()\n",
+    "model_1 = LinearRegression()\n",
+    "model_2 = LinearRegression()\n",
+    "model_0.fit(features_train_0, target_train_0)\n",
+    "model_1.fit(features_train_1, target_train_1)\n",
+    "model_2.fit(features_train_2, target_train_2)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#предсказание модели\n",
+    "predicted_0 = model_0.predict(features_valid_0)\n",
+    "predicted_1 = model_1.predict(features_valid_1)\n",
+    "predicted_2 = model_2.predict(features_valid_2)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Средний запас предсказанного сырья по валидационным данным из data_0: 92.59256778438038\n",
+      "Средний запас предсказанного сырья по валидационным данным из data_1: 68.728546895446\n",
+      "Средний запас предсказанного сырья по валидационным данным из data_2: 94.96504596800489\n"
+     ]
+    }
+   ],
+   "source": [
+    "#средний запас сырья на предсказанных данных по регионам\n",
+    "print('Средний запас предсказанного сырья по валидационным данным из data_0:', predicted_0.mean())\n",
+    "print('Средний запас предсказанного сырья по валидационным данным из data_1:', predicted_1.mean())\n",
+    "print('Средний запас предсказанного сырья по валидационным данным из data_2:', predicted_2.mean())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "RMSE по валидационным данным из data_0: 37.5794217150813\n",
+      "RMSE по валидационным данным из data_1: 0.893099286775616\n",
+      "RMSE по валидационным данным из data_2: 40.02970873393434\n"
+     ]
+    }
+   ],
+   "source": [
+    "#RMSE по регионам\n",
+    "#predictions_0 = pd.Series(target_valid_0.mean(), index=target_valid_0.index)\n",
+    "print('RMSE по валидационным данным из data_0:', mean_squared_error(target_valid_0, predicted_0)**0.5)\n",
+    "\n",
+    "#predictions_1 = pd.Series(target_valid_1.mean(), index=target_valid_1.index)\n",
+    "print('RMSE по валидационным данным из data_1:', mean_squared_error(target_valid_1, predicted_1)**0.5)\n",
+    "\n",
+    "#predictions_2 = pd.Series(target_valid_2.mean(), index=target_valid_2.index)\n",
+    "print('RMSE по валидационным данным из data_2:', mean_squared_error(target_valid_2, predicted_2)**0.5)\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Шаг 2. Выводы   \n",
+    "1) Проведено разделение на обучающую и валидационную выборки каждую базу по региону.   \n",
+    "2) Проведено обучение модели - линейная регресиия (из описания проекта сказано, что она лучше всех)   \n",
+    "3) Предсказаны данные по каждой валиадционной выборки   \n",
+    "4) Найдено среднее значение по запасам на предсказанных данных.  \n",
+    "5) Расчитано RMSE по каждой базе. Данные по базе 0 и 2 сильно больше, чем у базы 1. Значение по базе 1 почти идельное (чуть-чуть не хватает)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 3. Подготовка к расчёту прибыли"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Минимальный объем сырья для безубыточной разработки в регионе: 22222.222222222223\n",
+      "Минимальный объем сырья для каждой скважины для безубыточной разработки в регионе: 111.11111111111111\n"
+     ]
+    }
+   ],
+   "source": [
+    "#бюджет выделяемый на разработку скважин в регион\n",
+    "BUDGET = 10000000000\n",
+    "\n",
+    "#стоимость 1 барреля \n",
+    "COST_BAR = 450000\n",
+    "\n",
+    "#кол-во скважин для разработки в каждом региона\n",
+    "WELL = 200\n",
+    "\n",
+    "#находим объем сырья для безубыточной разработки\n",
+    "min_bar_reg = BUDGET / COST_BAR\n",
+    "\n",
+    "#находим объем сырья для 200 лучших скважин из каждого региона для безубыточной разработки \n",
+    "min_bar_well = min_bar_reg / WELL\n",
+    "\n",
+    "\n",
+    "print('Минимальный объем сырья для безубыточной разработки в регионе:', min_bar_reg)\n",
+    "print('Минимальный объем сырья для каждой скважины для безубыточной разработки в регионе:', min_bar_well)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Средний запас предсказанного сырья по валидационным данным из data_0: 92.59256778438038\n",
+      "Средний запас предсказанного сырья по валидационным данным из data_1: 68.728546895446\n",
+      "Средний запас предсказанного сырья по валидационным данным из data_2: 94.96504596800489\n"
+     ]
+    }
+   ],
+   "source": [
+    "#средний запас сырья на предсказанных данных по регионам\n",
+    "print('Средний запас предсказанного сырья по валидационным данным из data_0:', predicted_0.mean())\n",
+    "print('Средний запас предсказанного сырья по валидационным данным из data_1:', predicted_1.mean())\n",
+    "print('Средний запас предсказанного сырья по валидационным данным из data_2:', predicted_2.mean())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Разница между минимальным МОСДБР и средним объем сырья из данных data_0: 18.518543326730736\n",
+      "Разница между минимальным МОСДБР и средним объем сырья из данных data_1: 42.38256421566511\n",
+      "Разница между минимальным МОСДБР и средним объем сырья из данных data_2: 16.146065143106227\n"
+     ]
+    }
+   ],
+   "source": [
+    "#разница между минимальным объемом сырья для безубыточной разработки (МОСДБР) и средним объем запаса сырья из предсказаных данных по регионам\n",
+    "difference_data_0 = min_bar_well - predicted_0.mean()\n",
+    "difference_data_1 = min_bar_well - predicted_1.mean()\n",
+    "difference_data_2 = min_bar_well - predicted_2.mean()\n",
+    "\n",
+    "print('Разница между минимальным МОСДБР и средним объем сырья из данных data_0:', difference_data_0)\n",
+    "print('Разница между минимальным МОСДБР и средним объем сырья из данных data_1:', difference_data_1)\n",
+    "print('Разница между минимальным МОСДБР и средним объем сырья из данных data_2:', difference_data_2)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Шаг 3. Выводы   \n",
+    "1) Найден минимальный объем сырья, который сможет обеспечить нам безубыточность в регионе. - 22,2к  \n",
+    "2) Найден минимальный объем сырья для каждой разрабатываемой скважины в регионе.  -  111,1.    \n",
+    "3) Найденный минимальный объем сырья больше, чем средений запас сырья в каждом регионе. Разница от 16.1 до 42.3 в зависимости от региона. (данные по data_0 и data_2 - рядом 16 и 18, сильно вырывается вперед данные по data_1 - 42.3)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 4. Функция для расчета прибыли\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "         f0        f1        f2     product  product_pred\n",
+      "0  0.948970 -0.057547  2.095727   10.038645     95.894952\n",
+      "1  0.992974  0.206671 -0.142278  114.551489     77.572583\n",
+      "2  1.199854 -0.563356 -1.852991  132.603635     77.892640\n",
+      "3  0.691422 -0.433347  0.564974  169.072125     90.175134\n",
+      "4  0.420772  0.972638  0.736190  122.325180     70.510088\n",
+      "5 -0.502687  0.729647  0.510063   37.735331     69.127076\n",
+      "6  1.358998 -0.569837  5.207498  139.227191    125.106759\n",
+      "7  0.949783  0.187695  1.368214   72.491987     87.643849\n",
+      "8  0.742510  0.733056  2.403405   11.465993     86.035871\n",
+      "9  1.911387  0.023812  2.163916  110.562031     98.655311\n",
+      "          f0         f1        f2     product  product_pred\n",
+      "0  -0.371866  -1.862494  3.002210   80.859783     82.663314\n",
+      "1   9.015122 -13.881455  1.995363   53.906522     54.431786\n",
+      "2  -6.507568  -4.817448  1.003449   30.132364     29.748760\n",
+      "3  14.560845 -10.667755  1.995175   53.906522     53.552133\n",
+      "4   6.090476  -4.494723  0.013815    0.000000      1.243856\n",
+      "5 -11.952141  -1.297294  4.008072  110.992147    111.438490\n",
+      "6  -3.078719  -2.971227  5.007848  137.945408    137.134374\n",
+      "7  -2.902590   0.654381  2.999027   84.038886     82.888902\n",
+      "8  -8.381416 -10.852993  3.999385  110.992147    110.897311\n",
+      "9  -2.569247 -10.781239  1.000110   26.953261     29.219306\n",
+      "         f0        f1        f2     product  product_pred\n",
+      "0 -1.444717 -3.861599  2.225805   61.212375     93.599633\n",
+      "1 -1.418617  1.276544 -0.976433   41.850118     75.105159\n",
+      "2 -4.587649 -0.413199  1.649268   57.776581     90.066809\n",
+      "3  1.871584  1.619101  4.273555  100.053761    105.162375\n",
+      "4 -2.028785  4.128167  6.089547  109.897122    115.303310\n",
+      "5 -0.028229  1.989053  7.225462  105.904629    121.939197\n",
+      "6 -0.966167 -0.367683  6.707670   51.646180    119.053040\n",
+      "7 -3.040141 -3.336128 -0.950435  173.162121     75.396575\n",
+      "8 -0.739892 -0.031971  5.368372  113.143072    111.400543\n",
+      "9  3.264808  0.227611  0.553791   56.803215     84.029320\n"
+     ]
+    }
+   ],
+   "source": [
+    "#соединяю данные предсказыне и целевые в каждом регионе \n",
+    "#data_0\n",
+    "target_valid_0 = data_valid_0.reset_index().drop('index', axis=1)\n",
+    "predicted_0 = pd.DataFrame(predicted_0)\n",
+    "predicted_0.columns = ['product_pred']\n",
+    "pred_target_valid_0 = pd.concat((target_valid_0, predicted_0), axis=1)\n",
+    "print(pred_target_valid_0.head(10))\n",
+    "\n",
+    "#data_1\n",
+    "target_valid_1 = data_valid_1.reset_index().drop('index', axis=1)\n",
+    "predicted_1 = pd.DataFrame(predicted_1)\n",
+    "predicted_1.columns = ['product_pred']\n",
+    "pred_target_valid_1 = pd.concat((target_valid_1, predicted_1), axis=1)\n",
+    "print(pred_target_valid_1.head(10))\n",
+    "\n",
+    "#data_2\n",
+    "target_valid_2 = data_valid_2.reset_index().drop('index', axis=1)\n",
+    "predicted_2 = pd.DataFrame(predicted_2)\n",
+    "predicted_2.columns = ['product_pred']\n",
+    "pred_target_valid_2 = pd.concat((target_valid_2, predicted_2), axis=1)\n",
+    "print(pred_target_valid_2.head(10))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#функция подсчета прибыли\n",
+    "def profit_top_well(data):\n",
+    "    data = data.sort_values(by = 'product_pred', ascending = False)\n",
+    "    data = data[:WELL]\n",
+    "    profit_bar = round(data['product'].sum() *  COST_BAR / 1000000000 - 10, 2)\n",
+    "    return profit_bar"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Прибыль с топ-200 скважин по предсказанным данным 3.32 млрд рублей\n",
+      "Прибыль с топ-200 скважин по предсказанным данным 2.42 млрд рублей\n",
+      "Прибыль с топ-200 скважин по предсказанным данным 2.71 млрд рублей\n"
+     ]
+    }
+   ],
+   "source": [
+    "#подсчет прибыли с каждого региона\n",
+    "\n",
+    "print(\"Прибыль с топ-200 скважин по предсказанным данным\", profit_top_well(pred_target_valid_0), 'млрд рублей')\n",
+    "print(\"Прибыль с топ-200 скважин по предсказанным данным\", profit_top_well(pred_target_valid_1), 'млрд рублей')\n",
+    "print(\"Прибыль с топ-200 скважин по предсказанным данным\", profit_top_well(pred_target_valid_2), 'млрд рублей')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Шаг 4. Выводы   \n",
+    "По топ-200 по предсказанным данным (но подсчеты проводим по целевым значениям), добыча нефти в каждом регионе будет прибыльной, так как план по доходу получается более 12 млрд рублей - при затратах в 10 млрд рублей.   \n",
+    "Итого профит: от 2,4 млрд до 3,3 млрд\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 5. Подсчеты рисков и прибыли для каждого региона"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Среднее по выборочным средним из топ-200 каждой выборки из данных data_0: 0.4 млрд рублей\n",
+      "Среднее по выборочным средним из топ-200 каждой выборки из данных data_1: 0.46 млрд рублей\n",
+      "Среднее по выборочным средним из топ-200 каждой выборки из данных data_2: 0.39 млрд рублей\n"
+     ]
+    }
+   ],
+   "source": [
+    "#создаем 1000 выборок при помощи бутстрепа для каждого региона (на предсказанных данных) и находим среднее по средним\n",
+    "state = np.random.RandomState(12345)\n",
+    "\n",
+    "#data_0\n",
+    "sum_profit_0 = 0\n",
+    "for i in range(1000):\n",
+    "    subsample = pred_target_valid_0.sample(n=500, replace=True, random_state=state)\n",
+    "    sum_profit_0 += profit_top_well(subsample)\n",
+    "mean_profit_0 = round((sum_profit_0 / 1000), 2)\n",
+    "print('Среднее по выборочным средним из топ-200 каждой выборки из данных data_0:', mean_profit_0, 'млрд рублей')\n",
+    "\n",
+    "#data_1\n",
+    "sum_profit_1 = 0\n",
+    "for i in range(1000):\n",
+    "    subsample = pred_target_valid_1.sample(n=500, replace=True, random_state=state)\n",
+    "    sum_profit_1 += profit_top_well(subsample)\n",
+    "mean_profit_1 = round((sum_profit_1 / 1000), 2)\n",
+    "print('Среднее по выборочным средним из топ-200 каждой выборки из данных data_1:', mean_profit_1, 'млрд рублей')\n",
+    "\n",
+    "#data_2\n",
+    "sum_profit_2 = 0\n",
+    "for i in range(1000):\n",
+    "    subsample = pred_target_valid_2.sample(n=500, replace=True, random_state=state)\n",
+    "    sum_profit_2 += profit_top_well(subsample)\n",
+    "mean_profit_2 = round((sum_profit_2 / 1000), 2)\n",
+    "print('Среднее по выборочным средним из топ-200 каждой выборки из данных data_2:', mean_profit_2, 'млрд рублей')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "95% доверительный интервал на данных\n",
+      "-0.12024999999999997\n",
+      "0.91\n",
+      "Процент убыточных топовых скважин: 5.6000000000000005\n",
+      "--\n",
+      "Среднее по топовым скважинам: 0.39370000000000005\n",
+      "--------------------\n",
+      "95% доверительный интервал на данных\n",
+      "0.05\n",
+      "0.84\n",
+      "Процент убыточных топовых скважин: 1.2\n",
+      "--\n",
+      "Среднее по топовым скважинам: 0.44817\n",
+      "--------------------\n",
+      "95% доверительный интервал на данных\n",
+      "-0.2\n",
+      "0.93\n",
+      "Процент убыточных топовых скважин: 9.0\n",
+      "--\n",
+      "Среднее по топовым скважинам: 0.38258000000000003\n",
+      "--------------------\n"
+     ]
+    }
+   ],
+   "source": [
+    "#находим 95% интервал\n",
+    "pred_target = [pred_target_valid_0, pred_target_valid_1, pred_target_valid_2]\n",
+    "for element in pred_target:\n",
+    "    mean_profit_top_well = []\n",
+    "    minus = 0\n",
+    "    for i in range(1000):\n",
+    "        subsample = element.sample(n=500, replace=True, random_state=state)\n",
+    "        mean_profit_top_well.append(profit_top_well(subsample))\n",
+    "        if mean_profit_top_well[i] < 0:\n",
+    "            minus += 1\n",
+    "\n",
+    "    mean_profit_top_well = pd.Series(mean_profit_top_well)\n",
+    "\n",
+    "    lower = mean_profit_top_well.quantile(0.025)\n",
+    "    upper = mean_profit_top_well.quantile(0.975)\n",
+    "    \n",
+    "    print('95% доверительный интервал на данных')\n",
+    "    print(lower)\n",
+    "    print(upper)\n",
+    "    \n",
+    "#находим риск убытков    \n",
+    "    print('Процент убыточных топовых скважин:', minus / 1000 * 100)\n",
+    "    print('--')\n",
+    "\n",
+    "#находим среднее по топовым скважинам\n",
+    "    print('Среднее по топовым скважинам:', mean_profit_top_well.mean())\n",
+    "    print('--------------------')\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "95% доверительный интервал на данных data_0\n",
+      "-0.1\n",
+      "0.86\n",
+      "-----\n",
+      "Процент убыточных топовых скважин: 6.800000000000001\n",
+      "-----\n",
+      "Среднее по топовым скважинам из data_0: 0.37228\n"
+     ]
+    }
+   ],
+   "source": [
+    "#находим 95% интервал\n",
+    "#data_0\n",
+    "mean_profit_top_well_0 = []\n",
+    "for i in range(1000):\n",
+    "    subsample = pred_target_valid_0.sample(n=500, replace=True, random_state=state)\n",
+    "    mean_profit_top_well_0.append(profit_top_well(subsample))\n",
+    "\n",
+    "mean_profit_top_well_0 = pd.Series(mean_profit_top_well_0)\n",
+    "    \n",
+    "lower_0 = mean_profit_top_well_0.quantile(0.025)\n",
+    "upper_0 = mean_profit_top_well_0.quantile(0.975)\n",
+    "\n",
+    "print('95% доверительный интервал на данных data_0')\n",
+    "print(lower_0)\n",
+    "print(upper_0)\n",
+    "print('-----')\n",
+    "\n",
+    "#находим риск убытков\n",
+    "minus = 0\n",
+    "for i in range(1000):\n",
+    "    if mean_profit_top_well_0[i] < 0:\n",
+    "        minus += 1\n",
+    "print('Процент убыточных топовых скважин:', minus / 1000 * 100)\n",
+    "print('-----')\n",
+    "\n",
+    "#находим среднее по топовым скважинам\n",
+    "print('Среднее по топовым скважинам из data_0:', mean_profit_top_well_0.mean())\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "95% доверительный интервал на данных data_1\n",
+      "0.06\n",
+      "0.84\n",
+      "-----\n",
+      "Процент убыточных топовых скважин: 1.0\n",
+      "-----\n",
+      "Среднее по топовым скважинам из data_1: 0.45755\n"
+     ]
+    }
+   ],
+   "source": [
+    "#находим 95% интервал\n",
+    "#data_1\n",
+    "mean_profit_top_well_1 = []\n",
+    "for i in range(1000):\n",
+    "    subsample = pred_target_valid_1.sample(n=500, replace=True, random_state=state)\n",
+    "    mean_profit_top_well_1.append(profit_top_well(subsample))\n",
+    "\n",
+    "mean_profit_top_well_1 = pd.Series(mean_profit_top_well_1)\n",
+    "    \n",
+    "lower_1 = mean_profit_top_well_1.quantile(0.025)\n",
+    "upper_1 = mean_profit_top_well_1.quantile(0.975)\n",
+    "\n",
+    "print('95% доверительный интервал на данных data_1')\n",
+    "print(lower_1)\n",
+    "print(upper_1)\n",
+    "print('-----')\n",
+    "\n",
+    "#находим риск убытков\n",
+    "minus = 0\n",
+    "for i in range(1000):\n",
+    "    if mean_profit_top_well_1[i] < 0:\n",
+    "        minus += 1\n",
+    "print('Процент убыточных топовых скважин:', minus / 1000 * 100)\n",
+    "print('-----')\n",
+    "\n",
+    "#находим среднее по топовым скважинам\n",
+    "print('Среднее по топовым скважинам из data_1:', mean_profit_top_well_1.mean())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "95% доверительный интервал на данных data_2\n",
+      "-0.15\n",
+      "0.9104999999999996\n",
+      "-----\n",
+      "Процент убыточных топовых скважин: 7.6\n",
+      "-----\n",
+      "Среднее по топовым скважинам из data_2: 0.38588\n"
+     ]
+    }
+   ],
+   "source": [
+    "#находим 95% интервал\n",
+    "#data_2\n",
+    "mean_profit_top_well_2 = []\n",
+    "for i in range(1000):\n",
+    "    subsample = pred_target_valid_2.sample(n=500, replace=True, random_state=state)\n",
+    "    mean_profit_top_well_2.append(profit_top_well(subsample))\n",
+    "\n",
+    "mean_profit_top_well_2 = pd.Series(mean_profit_top_well_2)\n",
+    "    \n",
+    "lower_2 = mean_profit_top_well_2.quantile(0.025)\n",
+    "upper_2 = mean_profit_top_well_2.quantile(0.975)\n",
+    "\n",
+    "print('95% доверительный интервал на данных data_2')\n",
+    "print(lower_2)\n",
+    "print(upper_2)\n",
+    "print('-----')\n",
+    "\n",
+    "#находим риск убытков\n",
+    "minus = 0\n",
+    "for i in range(1000):\n",
+    "    if mean_profit_top_well_2[i] < 0:\n",
+    "        minus += 1\n",
+    "print('Процент убыточных топовых скважин:', minus / 1000 * 100)\n",
+    "print('-----')\n",
+    "\n",
+    "#находим среднее по топовым скважинам\n",
+    "print('Среднее по топовым скважинам из data_2:', mean_profit_top_well_2.mean())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Шаг 5. Выводы   \n",
+    "  \n",
+    "1) Самый главный вывод проделанной работы, что разрабатывать нужно скважины из геопозиции - data_1   \n",
+    "а) Во-первых - у этих данных самый низкий процент убыточных скважин   \n",
+    "б) Во-вторых - у этих данных получился самый лучший доверительный интервал   \n",
+    "в) В-третьих - у этих данных самый высокий показатель среднего из топовых скважин"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Чек-лист готовности проекта"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Поставьте 'x' в выполненных пунктах. Далее нажмите Shift+Enter."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "- [x]  Jupyter Notebook открыт\n",
+    "- [x]  Весь код выполняется без ошибок\n",
+    "- [x]  Ячейки с кодом расположены в порядке исполнения\n",
+    "- [x]  Выполнен шаг 1: данные подготовлены\n",
+    "- [x]  Выполнен шаг 2: модели обучены и проверены\n",
+    "    - [x]  Данные корректно разбиты на обучающую и валидационную выборки\n",
+    "    - [x]  Модели обучены, предсказания сделаны\n",
+    "    - [x]  Предсказания и правильные ответы на валидационной выборке сохранены\n",
+    "    - [x]  На экране напечатаны результаты\n",
+    "    - [x]  Сделаны выводы\n",
+    "- [x]  Выполнен шаг 3: проведена подготовка к расчёту прибыли\n",
+    "    - [x]  Для всех ключевых значений созданы константы Python\n",
+    "    - [x]  Посчитано минимальное среднее количество продукта в месторождениях региона, достаточное для разработки\n",
+    "    - [x]  По предыдущему пункту сделаны выводы\n",
+    "    - [x]  Написана функция расчёта прибыли\n",
+    "- [x]  Выполнен шаг 4: посчитаны риски и прибыль\n",
+    "    - [x]  Проведена процедура *Bootstrap*\n",
+    "    - [x]  Все параметры бутстрепа соответствуют условию\n",
+    "    - [x]  Найдены все нужные величины\n",
+    "    - [x]  Предложен регион для разработки месторождения\n",
+    "    - [x]  Выбор региона обоснован"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.8"
+  },
+  "toc": {
+   "base_numbering": 1,
+   "nav_menu": {},
+   "number_sections": true,
+   "sideBar": true,
+   "skip_h1_title": true,
+   "title_cell": "Table of Contents",
+   "title_sidebar": "Contents",
+   "toc_cell": false,
+   "toc_position": {},
+   "toc_section_display": true,
+   "toc_window_display": false
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
